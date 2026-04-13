@@ -22,10 +22,27 @@ function privateEnv() {
 	return env as Record<string, string | undefined>;
 }
 
-async function sendTelegram(item: SpApiPricingItem): Promise<boolean> {
-	const token = privateEnv().TELEGRAM_BOT_TOKEN;
-	const chatId = privateEnv().TELEGRAM_CHAT_ID;
-	if (!token?.trim() || !chatId?.trim()) return false;
+function isPricingItem(x: unknown): x is SpApiPricingItem {
+	if (!x || typeof x !== 'object' || !('ASIN' in x) || !('Product' in x)) return false;
+	return typeof (x as SpApiPricingItem).ASIN === 'string';
+}
+
+export type TelegramCredentials = { botToken?: string; chatId?: string };
+
+/** Send formatted alert. Per-field: form value if non-empty, else env `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`. */
+export async function sendTelegramAlert(
+	item: SpApiPricingItem,
+	overrides?: TelegramCredentials
+): Promise<{ ok: true } | { ok: false; error: string }> {
+	const e = privateEnv();
+	const token = (overrides?.botToken?.trim() || e.TELEGRAM_BOT_TOKEN?.trim()) ?? '';
+	const chatId = (overrides?.chatId?.trim() || e.TELEGRAM_CHAT_ID?.trim()) ?? '';
+	if (!token || !chatId) {
+		return {
+			ok: false,
+			error: 'Provide bot token + chat id in the form or set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env.local'
+		};
+	}
 
 	const priceInfo = item.Product.CompetitivePricing.CompetitivePrices[0].Price;
 	const salesRank = item.Product.SalesRankings[0].Rank;
@@ -44,15 +61,14 @@ async function sendTelegram(item: SpApiPricingItem): Promise<boolean> {
 			text,
 			parse_mode: 'Markdown'
 		});
-		return true;
+		return { ok: true };
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		console.error('[m1] Telegram:', msg);
-		return false;
+		return { ok: false, error: msg };
 	}
 }
 
-/** MVP: LWA → sandbox pricing → optional Telegram (if env set). */
+/** LWA → sandbox pricing only (no Telegram). */
 export async function runM1() {
 	const e = privateEnv();
 	const CREDENTIALS = {
@@ -76,19 +92,10 @@ export async function runM1() {
 			headers: { 'x-amz-access-token': accessToken }
 		});
 
-		const payload = spApi.data?.payload;
-		let telegramSent = false;
-		if (Array.isArray(payload)) {
-			for (const item of payload) {
-				if (item && typeof item === 'object' && 'ASIN' in item) {
-					const sent = await sendTelegram(item as SpApiPricingItem);
-					telegramSent = telegramSent || sent; // any successful send sets to true
-				}
-			}
-		}
-
-		return { ok: true as const, data: spApi.data, telegramSent };
+		return { ok: true as const, data: spApi.data };
 	} catch {
 		return { ok: false as const };
 	}
 }
+
+export { isPricingItem };
