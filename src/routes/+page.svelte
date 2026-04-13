@@ -11,6 +11,12 @@
 	let tgBotToken = $state('');
 	let tgChatId = $state('');
 
+	let hasPayload = $derived.by(() => {
+		if (!result || !('ok' in result) || !result.ok) return false;
+		const p = (result.data as { payload?: unknown[] })?.payload;
+		return Array.isArray(p) && p.length > 0;
+	});
+
 	onMount(() => void refresh());
 
 	async function refresh() {
@@ -25,23 +31,21 @@
 		}
 	}
 
-	let firstPayloadItem = $derived.by(() => {
-		if (!result || !('ok' in result) || !result.ok) return null;
-		const data = result.data as { payload?: unknown[] };
-		const first = data?.payload?.[0];
-		return first ?? null;
-	});
-
 	async function onSendTelegram() {
-		if (!firstPayloadItem) return;
+		if (!result || !('ok' in result) || !result.ok) return;
+		const payload = (result.data as { payload?: unknown[] })?.payload;
+		if (!Array.isArray(payload) || payload.length === 0) return;
+
 		sending = true;
 		teleStatus = null;
 		try {
-			const out = await sendTelegramAlert(firstPayloadItem, {
-				botToken: tgBotToken,
-				chatId: tgChatId
-			});
-			teleStatus = out.ok ? 'Sent to Telegram.' : `Telegram: ${out.error}`;
+			for (const item of payload) {
+				const out = await sendTelegramAlert(item, {
+					botToken: tgBotToken,
+					chatId: tgChatId
+				});
+				teleStatus = out.ok ? 'Sent to Telegram.' : `Telegram: ${out.error}`;
+			}
 		} catch (e) {
 			teleStatus = e instanceof Error ? e.message : String(e);
 		} finally {
@@ -53,8 +57,10 @@
 <div class="mx-auto max-w-3xl space-y-4 p-6">
 	<h1 class="text-xl font-semibold text-neutral-900">SP-API</h1>
 	<p class="text-sm text-neutral-600">
-		<strong>Run again</strong> fetches sandbox pricing. <strong>Send to Telegram</strong> uses the first ASIN row. Leave the fields empty to use
-		<code class="rounded bg-neutral-100 px-1">.env.local</code>; otherwise each filled field overrides env.
+		<strong>Run again</strong> fetches sandbox pricing. <strong>Send to Telegram</strong> uses the
+		first ASIN row. Leave the fields empty to use
+		<code class="rounded bg-neutral-100 px-1">.env.local</code>; otherwise each filled field
+		overrides env.
 	</p>
 
 	<div class="space-y-2 rounded-lg border border-neutral-200 p-3">
@@ -94,7 +100,7 @@
 			type="button"
 			class="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
 			onclick={() => void onSendTelegram()}
-			disabled={sending || !firstPayloadItem}
+			disabled={sending || !hasPayload}
 		>
 			{sending ? 'Sending…' : 'Send to Telegram'}
 		</button>
@@ -107,7 +113,10 @@
 	<details class="rounded-lg border border-neutral-200">
 		<summary class="cursor-pointer px-3 py-2 text-sm font-medium">Response JSON</summary>
 		<pre
-			class="max-h-80 overflow-auto border-t border-neutral-200 p-3 font-mono text-xs"
-		>{JSON.stringify(result, null, 2)}</pre>
+			class="max-h-80 overflow-auto border-t border-neutral-200 p-3 font-mono text-xs">{JSON.stringify(
+				result,
+				null,
+				2
+			)}</pre>
 	</details>
 </div>
