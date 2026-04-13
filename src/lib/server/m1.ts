@@ -8,8 +8,9 @@ export type SpApiPricingItem = {
 		CompetitivePricing: {
 			CompetitivePrices: {
 				Price: {
-					LandedPrice: { Amount: number };
-					Shipping: { Amount: number };
+					LandedPrice: { Amount: number, CurrencyCode: string };
+					Shipping: { Amount: number, CurrencyCode: string };
+					ListingPrice: { Amount: number, CurrencyCode: string };
 				};
 			}[];
 			NumberOfOfferListings: { Count: number }[];
@@ -49,8 +50,9 @@ export async function sendTelegramAlert(
 	const offerCount = item.Product.CompetitivePricing.NumberOfOfferListings[0].Count;
 	const text = [
 		`🚨 *Amazon Alert: ${item.ASIN}*`,
-		`💰 *Price:* $${priceInfo.LandedPrice.Amount}`,
-		`🚚 *Shipping:* $${priceInfo.Shipping.Amount}`,
+		`💰 *Listing Price:* $${priceInfo.LandedPrice.Amount} ${priceInfo.LandedPrice.CurrencyCode ?? ''}`,
+		`🏷️ *Price:* $${priceInfo.LandedPrice.Amount} ${priceInfo.LandedPrice.CurrencyCode ?? ''}`,
+		`🚚 *Shipping:* $${priceInfo.Shipping.Amount} ${priceInfo.Shipping.CurrencyCode ?? ''}`,
 		`📉 *Rank:* #${salesRank}`,
 		`📊 *Offers:* ${offerCount}`
 	].join('\n');
